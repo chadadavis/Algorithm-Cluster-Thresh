@@ -1,6 +1,10 @@
 Revision history for {{$dist->name}}
 
 {{$NEXT}}
+    Fixed: each() on arrays not available in 5.008
+
+0.04      2011-06-28 13:48:24 Europe/Berlin
+    Explicit tests for average,single,complete linkage clustering
 
 0.03      2011-06-27 14:16:36 Europe/Berlin
     Added GitHub urls
