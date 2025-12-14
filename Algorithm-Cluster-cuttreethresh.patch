@@ -1,0 +1,122 @@
+diff -urN --strip-trailing-cr -r Algorithm-Cluster-1.50/perl/Cluster.xs Algorithm-Cluster-1.50-thresh/perl/Cluster.xs
+--- Algorithm-Cluster-1.50/perl/Cluster.xs	2010-04-01 04:17:40.000000000 +0200
++++ Algorithm-Cluster-1.50-thresh/perl/Cluster.xs	2011-05-26 13:48:50.336629000 +0200
+@@ -995,6 +995,42 @@
+     RETVAL
+ 
+ 
++AV *
++cutthresh(obj, cutoff)
++    SV* obj
++    double cutoff  
++    PREINIT:
++    int i;
++    int n;
++    Tree* tree;
++    int* clusterid;
++    CODE:
++    if (!sv_isa(obj, "Algorithm::Cluster::Tree")) {
++        croak("cutthresh can only be applied to an Algorithm::Cluster::Tree object");
++    }
++    tree = INT2PTR(Tree*,SvIV(SvRV(obj)));
++    n = tree->n + 1;
++    clusterid = malloc(n*sizeof(int));
++    if (!clusterid) {
++        croak("cutthresh: Insufficient memory");
++    }
++        /* --------------------------------------------------------------- */
++    cuttreethresh(n, tree->nodes, cutoff, clusterid);
++    /* -- Check for errors flagged by the C routine ------------------ */
++    if (clusterid[0]==-1) {
++        free(clusterid);
++        croak("cutthresh: Error in the cuttreethresh routine");
++    }
++    RETVAL = newAV();
++    for(i=0; i<n; i++) {
++        av_push(RETVAL, newSVnv(clusterid[i]));
++    }
++    free(clusterid);
++    sv_2mortal((SV*)RETVAL);
++    OUTPUT:
++    RETVAL
++
++
+ void DESTROY (obj)
+     SV* obj
+     PREINIT:
+diff -urN --strip-trailing-cr -r Algorithm-Cluster-1.50/perl/t/12_treecluster.t Algorithm-Cluster-1.50-thresh/perl/t/12_treecluster.t
+--- Algorithm-Cluster-1.50/perl/t/12_treecluster.t	2009-08-28 03:31:13.000000000 +0200
++++ Algorithm-Cluster-1.50-thresh/perl/t/12_treecluster.t	2011-05-26 14:17:59.762585000 +0200
+@@ -1,4 +1,4 @@
+-use Test::More tests => 224;
++use Test::More tests => 227;
+ 
+ use lib '../blib/lib','../blib/arch';
+ 
+@@ -558,3 +558,10 @@
+ is ($node->left, -10);
+ is ($node->right, -3);
+ is (sprintf("%7.3f", $node->distance), "  2.200");
++
++# Basic clustering test, inter-cluster distance <= 1.5
++my $clusters = $tree->cutthresh(1.5);
++is ( scalar(@$clusters) - 1, $tree->length);
++is   ($clusters->[0], $clusters->[9] );
++isnt ($clusters->[0], $clusters->[11]);
++
+diff -urN --strip-trailing-cr -r Algorithm-Cluster-1.50/src/cluster.c Algorithm-Cluster-1.50-thresh/src/cluster.c
+--- Algorithm-Cluster-1.50/src/cluster.c	2010-04-01 04:18:03.000000000 +0200
++++ Algorithm-Cluster-1.50-thresh/src/cluster.c	2011-05-26 13:51:24.208616000 +0200
+@@ -3177,6 +3177,41 @@
+ 
+ /* ******************************************************************** */
+ 
++
++void cuttreethresh (int nelements, Node* tree, double cutoff, int clusterid[])
++/*
++Like cuttree, but based on a distance threshold, rather than number of clusters
++*/
++{
++  int i;
++  /* number of clusters created */
++  int icluster = 0;
++  /* cluster IDs of internal (non-leaf) nodes */
++  int* nodeid = malloc(nelements*sizeof(int));
++  /* root belongs to cluster 0 */
++  nodeid[nelements-2] = icluster++;
++  for (i = 0; i < nelements; i++) {
++    clusterid[i] = -1;
++  }
++
++  for (i = nelements-2; i>=0; i--) {
++    int left = tree[i].left;
++    int right = tree[i].right;
++    int assigned = nodeid[i];
++    /* Nodes are numbered -1,-2,... Leafs are numbered 0,1,2,... */
++    /*  Left is always the same as the parent node's cluster */
++    if (left<0) nodeid[-left-1]=assigned; else clusterid[left]=assigned;
++    /* Put right into a new cluster, when thresh not satisfied */
++    if (tree[i].distance > cutoff) assigned = icluster++;
++    if (right<0) nodeid[-right-1]=assigned; else clusterid[right]=assigned;
++  }
++  free(nodeid);
++  return;
++}
++
++/* ******************************************************************** */
++
++
+ static
+ Node* pclcluster (int nrows, int ncolumns, double** data, int** mask,
+   double weight[], double** distmatrix, char dist, int transpose)
+diff -urN --strip-trailing-cr -r Algorithm-Cluster-1.50/src/cluster.h Algorithm-Cluster-1.50-thresh/src/cluster.h
+--- Algorithm-Cluster-1.50/src/cluster.h	2010-12-01 20:54:04.000000000 +0100
++++ Algorithm-Cluster-1.50-thresh/src/cluster.h	2011-05-25 18:41:33.503156000 +0200
+@@ -74,6 +74,7 @@
+ Node* treecluster (int nrows, int ncolumns, double** data, int** mask,
+   double weight[], int transpose, char dist, char method, double** distmatrix);
+ void cuttree (int nelements, Node* tree, int nclusters, int clusterid[]);
++void cuttreethresh (int nelements, Node* tree, double cutoff, int clusterid[]);
+ 
+ /* Chapter 5 */
+ void somcluster (int nrows, int ncolumns, double** data, int** mask,
