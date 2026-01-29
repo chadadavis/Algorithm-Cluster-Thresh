@@ -42,10 +42,6 @@ already been submitted as a patch:
 
 In the meantime, this module provides a Pure Perl implementation.
 
-=head1 SOURCE
-
- https://github.com/chadadavis/Algorithm-Cluster-Thresh
-
 =head1 METHODS
 
 =cut
